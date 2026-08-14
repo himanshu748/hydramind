@@ -1,0 +1,38 @@
+{
+  "label": "Hack Hydra Track 03 smoke evaluation",
+  "passed": 6,
+  "total": 6,
+  "duration_ms": 256.62,
+  "cases": [
+    {
+      "name": "cross_service_continuity",
+      "passed": true,
+      "detail": "A fresh MemoryService recalled a fact written by another instance."
+    },
+    {
+      "name": "explicit_revision_chronology",
+      "passed": true,
+      "detail": "The old fact stayed auditable while only the Wednesday revision was recalled."
+    },
+    {
+      "name": "missing_information_abstention",
+      "passed": true,
+      "detail": "An unsupported query returned an empty evidence list."
+    },
+    {
+      "name": "contradiction_trust_decay",
+      "passed": true,
+      "detail": "The older claim decayed from 1.0 to 0.6 and retained its contradiction edge."
+    },
+    {
+      "name": "two_hop_provenance_decay",
+      "passed": true,
+      "detail": "One-hop and two-hop dependent memories decayed to 0.85 and 0.70."
+    },
+    {
+      "name": "native_evidence_trace",
+      "passed": true,
+      "detail": "HydraDB hydrated bounded paths while scope post-filtering blocked a graph bridge."
+    }
+  ]
+}

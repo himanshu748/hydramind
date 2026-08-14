@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install Python and dependencies
+        run: uv sync --extra dev --locked
+      - name: Lint
+        run: uv run ruff check src tests examples
+      - name: Check formatting
+        run: uv run ruff format --check src tests examples
+      - name: Type-check
+        run: uv run mypy src
+      - name: Run database-independent tests
+        run: uv run pytest -m 'not integration'
