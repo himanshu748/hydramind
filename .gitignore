@@ -11,6 +11,8 @@ htmlcov/
 !.env.example
 build/
 dist/
+!ui/dist/
+!ui/dist/**
 *.db
 *.sqlite
 *.sqlite3
@@ -20,5 +22,4 @@ work/
 tmp/
 outputs/
 ui/node_modules/
-ui/dist/
 ui/*.tsbuildinfo

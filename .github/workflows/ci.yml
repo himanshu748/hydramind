@@ -12,6 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Rebuild the packaged UI
+        working-directory: ui
+        run: npm ci && npm run build
+      - name: Verify the packaged UI matches its source
+        run: git diff --exit-code -- ui/dist
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -25,3 +35,5 @@ jobs:
         run: uv run mypy src
       - name: Run database-independent tests
         run: uv run pytest -m 'not integration'
+      - name: Build installable artifacts
+        run: uv build

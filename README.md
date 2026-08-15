@@ -76,7 +76,7 @@ node has the same Bolt and OpenCypher behavior used by this test suite.
 With `uv`:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --locked
 ```
 
 Or with the standard library and pip:
@@ -230,15 +230,21 @@ HydraDB dashboard where judges can recall, remember, revise facts, inspect entit
 timelines, run native evidence traces, explain trust, and forget memories without
 leaving the demo.
 
-Build the interface once, then start the local server with HydraDB and
-`HYDRAMIND_TOKEN` already configured:
+The production interface is included in the repository and Python package, so it
+works immediately after the Python install. Start the local server with HydraDB
+and `HYDRAMIND_TOKEN` already configured:
+
+```bash
+.venv/bin/hydramind-ui
+```
+
+Only rebuild the interface after changing its source:
 
 ```bash
 cd ui
-npm install
+npm ci
 npm run build
 cd ..
-.venv/bin/hydramind-ui
 ```
 
 Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) for the landing page or
