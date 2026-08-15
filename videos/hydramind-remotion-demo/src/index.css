@@ -1,0 +1,52 @@
+@font-face {
+  font-family: "Inter";
+  src: url("../public/fonts/inter-400.woff2") format("woff2");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("../public/fonts/inter-600.woff2") format("woff2");
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("../public/fonts/inter-700.woff2") format("woff2");
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("../public/fonts/space-grotesk-500.woff2") format("woff2");
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("../public/fonts/space-grotesk-700.woff2") format("woff2");
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../public/fonts/ibm-plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../public/fonts/ibm-plex-mono-600.woff2") format("woff2");
+  font-weight: 600;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #191c20;
+  font-family: "Inter", sans-serif;
+}

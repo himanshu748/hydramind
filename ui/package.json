@@ -9,12 +9,15 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.9",
     "@vitejs/plugin-react": "6.0.5",
-    "vite": "8.2.1",
-    "typescript": "7.0.2",
+    "lucide-react": "1.31.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "lucide-react": "1.31.0"
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
   },
   "devDependencies": {
     "@types/react": "19.2.18",

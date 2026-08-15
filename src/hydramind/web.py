@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, urlparse
 from hydramind.db import HydraDB, HydraDBError
 from hydramind.tools import MemoryService
 
+MAX_DASHBOARD_BODY_BYTES = 1_048_576
+
 
 class DashboardService:
     """Expose dashboard-shaped reads and writes over the existing memory service."""
@@ -300,8 +302,19 @@ class HydraMindRequestHandler(BaseHTTPRequestHandler):
             self._send_error(exc)
 
     def _read_json(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(length).decode("utf-8")
+        content_type = self.headers.get("Content-Type", "").partition(";")[0].strip().casefold()
+        if content_type != "application/json":
+            raise ValueError("Content-Type must be application/json")
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("Content-Length must be an integer") from exc
+        if not 0 <= length <= MAX_DASHBOARD_BODY_BYTES:
+            raise ValueError(f"JSON body must be at most {MAX_DASHBOARD_BODY_BYTES} bytes")
+        try:
+            body = self.rfile.read(length).decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("JSON body must be valid UTF-8") from exc
         value = json.loads(body or "{}")
         if not isinstance(value, dict):
             raise ValueError("JSON body must be an object")
@@ -402,19 +415,30 @@ def main() -> None:
             "HydraMind UI is not built. Run: cd ui && npm install && npm run build", file=sys.stderr
         )
         raise SystemExit(1)
-    db = HydraDB()
+    host = os.getenv("HYDRAMIND_UI_HOST", "127.0.0.1")
+    port = _bounded_env_int("HYDRAMIND_UI_PORT", default=8787, minimum=1, maximum=65535)
+    db: HydraDB | None = None
     try:
+        db = HydraDB()
         db.verify_connection()
         db.setup_schema()
-    except HydraDBError as exc:
-        db.close()
+        dashboard = DashboardService(db)
+    except (HydraDBError, ValueError) as exc:
+        if db is not None:
+            db.close()
         print(f"HydraMind UI startup failed: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
-    HydraMindRequestHandler.dashboard = DashboardService(db)
+    assert db is not None
+    HydraMindRequestHandler.dashboard = dashboard
     HydraMindRequestHandler.static_root = static_root
-    host = os.getenv("HYDRAMIND_UI_HOST", "127.0.0.1")
-    port = int(os.getenv("HYDRAMIND_UI_PORT", "8787"))
-    server = ThreadingHTTPServer((host, port), HydraMindRequestHandler)
+    try:
+        server = ThreadingHTTPServer((host, port), HydraMindRequestHandler)
+    except OSError as exc:
+        db.close()
+        print(
+            f"HydraMind UI startup failed: cannot listen on {host}:{port}: {exc}", file=sys.stderr
+        )
+        raise SystemExit(1) from exc
     print(f"HydraMind UI: http://{host}:{port}", file=sys.stderr)
     try:
         server.serve_forever()
@@ -423,6 +447,19 @@ def main() -> None:
     finally:
         server.server_close()
         db.close()
+
+
+def _bounded_env_int(name: str, *, default: int, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise SystemExit(f"{name} must be between {minimum} and {maximum}")
+    return value
 
 
 if __name__ == "__main__":

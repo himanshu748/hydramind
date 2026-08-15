@@ -98,7 +98,10 @@ def test_real_mcp_client_can_remember_recall_and_forget(live_db: HydraDB) -> Non
             assert trace.structured_content["engine"] == "HydraDB algo.SSpaths"
             assert trace.structured_content["paths"]
 
-            forgotten = await client.call_tool("forget", {"memory_id": revised_id})
+            forgotten = await client.call_tool(
+                "forget",
+                {"memory_id": revised_id, "scope": scope},
+            )
             assert not forgotten.is_error
             assert forgotten.structured_content == {"result": True}
 

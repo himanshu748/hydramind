@@ -49,12 +49,20 @@ def test_recall_is_scoped_entity_filtered_ranked_and_can_abstain(
     )
     service.remember("Document the command line flags.", scope, [f"{prefix}:cli"])
     service.remember("Use pytest for a different repository.", f"{prefix}:other-scope", [entity])
+    routing_entity = f"{prefix}:routing-policy"
+    routing_id = service.remember(
+        "Production deploys must always use direct routing.", scope, [routing_entity]
+    )
 
     recalled = service.recall("pytest testing Bolt", scope, [entity], limit=5)
 
     assert [memory["id"] for memory in recalled] == [wanted_id]
     assert service.recall("quantum sandwich", scope, [entity]) == []
+    assert service.recall("who owns the HydraDB Bolt adapter", scope, [entity]) == []
     assert service.recall("the and to", scope, [entity]) == []
+    natural_question = service.recall("How should production route?", scope, [routing_entity])
+    assert [memory["id"] for memory in natural_question] == [routing_id]
+    assert service.recall("Who owns the production routing policy?", scope, [routing_entity]) == []
 
 
 def test_conflicting_remember_decays_old_memory_and_explains_trust(
@@ -68,7 +76,7 @@ def test_conflicting_remember_decays_old_memory_and_explains_trust(
     conflicts = service.check_conflict(proposed, [entity], scope=scope)
     new_id = service.remember(proposed, scope, [entity])
     recalled = service.recall("agent direct routing", scope, [entity])
-    explanation = service.explain_trust(old_id)
+    explanation = service.explain_trust(old_id, scope)
 
     assert conflicts[0]["id"] == old_id
     assert [memory["id"] for memory in recalled] == [new_id, old_id]
@@ -142,8 +150,8 @@ RETURN memory.id AS id, memory.trust_score AS trust_score
     assert trust_by_id[root] == 0.6
     assert trust_by_id[child] == 0.85
     assert trust_by_id[grandchild] == 0.7
-    assert any("Derived trust decayed" in event for event in service.explain_trust(child))
-    assert any("propagated 2 hop(s)" in event for event in service.explain_trust(grandchild))
+    assert any("Derived trust decayed" in event for event in service.explain_trust(child, scope))
+    assert any("propagated 2 hop(s)" in event for event in service.explain_trust(grandchild, scope))
 
     edges = live_db.query(
         """
@@ -203,7 +211,9 @@ RETURN older.status AS old_status,
     ]
     assert service.recall("Tuesday", scope, [entity]) == []
     assert [memory["id"] for memory in service.recall("Wednesday deploy window", scope)] == [new_id]
-    assert any("The release calendar changed." in event for event in service.explain_trust(old_id))
+    assert any(
+        "The release calendar changed." in event for event in service.explain_trust(old_id, scope)
+    )
 
 
 def test_timeline_returns_revision_history_in_chronological_order(
@@ -313,9 +323,12 @@ MERGE (older)-[supersession:SUPERSEDED_BY {id: row.edge_id}]->(newer)
         },
     )
 
-    assert any(f"Superseded by memory {new_id}" in event for event in service.explain_trust(old_id))
     assert any(
-        f"Superseded older memory {old_id}" in event for event in service.explain_trust(new_id)
+        f"Superseded by memory {new_id}" in event for event in service.explain_trust(old_id, scope)
+    )
+    assert any(
+        f"Superseded older memory {old_id}" in event
+        for event in service.explain_trust(new_id, scope)
     )
 
 
@@ -328,8 +341,8 @@ def test_forget_tombstones_without_breaking_provenance(
     old_id = service.remember("Always retain the audit trail.", scope, [entity])
     new_id = service.remember("Never retain the audit trail.", scope, [entity])
 
-    assert service.forget(new_id) is True
-    assert service.forget("42") is False
+    assert service.forget(new_id, scope) is True
+    assert service.forget("42", scope) is False
     assert all(memory["id"] != new_id for memory in service.recall("audit trail", scope))
     edges = live_db.query(
         """
@@ -341,7 +354,7 @@ RETURN count(*) AS edge_count
     assert edges[0]["edge_count"] == 1
 
 
-def test_memory_id_operations_accept_an_optional_scope_guard(
+def test_memory_id_operations_require_a_scope_guard(
     integration_context: tuple[MemoryService, str, str],
 ) -> None:
     service, scope, prefix = integration_context

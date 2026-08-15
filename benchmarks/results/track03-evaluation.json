@@ -2,7 +2,15 @@
   "label": "Hack Hydra Track 03 smoke evaluation",
   "passed": 6,
   "total": 6,
-  "duration_ms": 256.62,
+  "duration_ms": 5338.35,
+  "generated_at": "2026-08-15T17:02:50Z",
+  "environment": {
+    "hydramind": "0.3.0",
+    "python": "3.12.11",
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "hydradb_uri": "neo4j://127.0.0.1:7687",
+    "hydradb_commit": "6a2fbb192f37f51a93690a2ae2d2f5e27e6e4219"
+  },
   "cases": [
     {
       "name": "cross_service_continuity",
@@ -17,7 +25,7 @@
     {
       "name": "missing_information_abstention",
       "passed": true,
-      "detail": "An unsupported query returned an empty evidence list."
+      "detail": "Both a disjoint query and a domain-overlap owner hard negative returned empty evidence, while a supported natural-language question recalled its fact."
     },
     {
       "name": "contradiction_trust_decay",
@@ -32,7 +40,7 @@
     {
       "name": "native_evidence_trace",
       "passed": true,
-      "detail": "HydraDB hydrated bounded paths while scope post-filtering blocked a graph bridge."
+      "detail": "HydraDB hydrated bounded paths while scoped entity IDs and path filtering blocked a graph bridge."
     }
   ]
 }

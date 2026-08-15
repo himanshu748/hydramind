@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from neo4j import Driver, GraphDatabase, Record
-from neo4j.exceptions import Neo4jError, ServiceUnavailable
+from neo4j.exceptions import ConfigurationError, Neo4jError, ServiceUnavailable
 
 DEFAULT_HYDRADB_URI = "neo4j://127.0.0.1:7687"
 DEFAULT_HYDRADB_USERNAME = "neo4j"
@@ -66,7 +66,12 @@ class HydraDB:
         auth = None
         if self.config.password is not None:
             auth = (self.config.username, self.config.password)
-        self._driver = GraphDatabase.driver(self.config.uri, auth=auth)
+        try:
+            self._driver = GraphDatabase.driver(self.config.uri, auth=auth)
+        except (ConfigurationError, Neo4jError, ValueError) as exc:
+            raise HydraDBError(
+                f"Invalid HydraDB connection configuration for {self.config.uri}: {exc}"
+            ) from exc
 
     def verify_connection(self) -> None:
         """Verify that the configured Bolt endpoint is reachable and responsive."""

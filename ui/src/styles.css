@@ -410,10 +410,15 @@ button:disabled {
   position: relative;
   height: 500px;
   margin-top: 22px;
-  overflow: hidden;
+  overflow: auto;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background: rgba(255, 253, 247, 0.58);
+}
+
+.graph-world {
+  position: relative;
+  min-width: 900px;
 }
 
 .canvas-grid {

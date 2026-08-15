@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
+import platform
 import time
+from datetime import UTC, datetime
+from importlib.metadata import version
+from pathlib import Path
 from typing import TypedDict
 from uuid import uuid4
 
@@ -26,6 +32,8 @@ class EvaluationReport(TypedDict):
     passed: int
     total: int
     duration_ms: float
+    generated_at: str
+    environment: dict[str, str]
     cases: list[EvaluationCase]
 
 
@@ -78,12 +86,31 @@ def run_track03_evaluation(db: HydraDB) -> EvaluationReport:
             "The old fact stayed auditable while only the Wednesday revision was recalled.",
         )
 
+        abstention_entity = f"{prefix}:abstention-policy"
+        abstention_id = writer.remember(
+            "The production routing policy requires direct traffic.",
+            scope,
+            [abstention_entity],
+        )
         missing = reader.recall("quasar lattice checksum", scope)
+        hard_negative = reader.recall(
+            "Who owns the production routing policy?",
+            scope,
+            [abstention_entity],
+        )
+        supported = reader.recall(
+            "How should production traffic route?",
+            scope,
+            [abstention_entity],
+        )
         _record(
             cases,
             "missing_information_abstention",
-            missing == [],
-            "An unsupported query returned an empty evidence list.",
+            missing == []
+            and hard_negative == []
+            and bool(supported and supported[0]["id"] == abstention_id),
+            "Both a disjoint query and a domain-overlap owner hard negative returned "
+            "empty evidence, while a supported natural-language question recalled its fact.",
         )
 
         policy_entity = f"{prefix}:routing-policy"
@@ -111,7 +138,7 @@ def run_track03_evaluation(db: HydraDB) -> EvaluationReport:
         )
         trust = _trust_by_id(db, scope)
         contradiction_passed = trust[root_id] == 0.6 and any(
-            "Contradicted by memory" in event for event in reader.explain_trust(root_id)
+            "Contradicted by memory" in event for event in reader.explain_trust(root_id, scope)
         )
         _record(
             cases,
@@ -155,7 +182,8 @@ def run_track03_evaluation(db: HydraDB) -> EvaluationReport:
             cases,
             "native_evidence_trace",
             trace_passed,
-            "HydraDB hydrated bounded paths while scope post-filtering blocked a graph bridge.",
+            "HydraDB hydrated bounded paths while scoped entity IDs and path filtering "
+            "blocked a graph bridge.",
         )
     finally:
         db.execute_write(
@@ -173,6 +201,14 @@ def run_track03_evaluation(db: HydraDB) -> EvaluationReport:
         "passed": passed,
         "total": len(cases),
         "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "environment": {
+            "hydramind": version("hydramind"),
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "hydradb_uri": db.config.uri,
+            "hydradb_commit": os.getenv("HYDRAMIND_HYDRADB_COMMIT", "unspecified"),
+        },
         "cases": cases,
     }
 
@@ -196,11 +232,18 @@ RETURN memory.id AS id, memory.trust_score AS trust_score
 def main() -> None:
     """Run the live evaluation and print machine-readable JSON."""
 
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
     with HydraDB() as db:
         db.verify_connection()
         db.setup_schema()
         report = run_track03_evaluation(db)
-    print(json.dumps(report, indent=2))
+    rendered = json.dumps(report, indent=2)
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(f"{rendered}\n", encoding="utf-8")
+    print(rendered)
     if report["passed"] != report["total"]:
         raise SystemExit(1)
 

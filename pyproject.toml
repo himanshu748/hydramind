@@ -34,6 +34,23 @@ packages = ["src/hydramind"]
 [tool.hatch.build.targets.wheel.force-include]
 "ui/dist" = "hydramind/ui"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.coverage",
+  "/.mypy_cache",
+  "/.playwright-cli",
+  "/.pytest_cache",
+  "/.ruff_cache",
+  "/.venv",
+  "/dist",
+  "/output",
+  "/outputs",
+  "/tmp",
+  "/ui/node_modules",
+  "/videos",
+  "/work",
+]
+
 [tool.hatch.build.targets.sdist.force-include]
 "ui/dist" = "ui/dist"
 

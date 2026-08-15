@@ -36,17 +36,25 @@ class RuntimeState:
 async def hydramind_lifespan(_: MCPServer[RuntimeState]) -> AsyncIterator[RuntimeState]:
     """Verify Bolt before serving and keep only the reusable driver pool in memory."""
 
-    db = HydraDB()
+    db: HydraDB | None = None
     try:
+        db = HydraDB()
         db.verify_connection()
         db.setup_schema()
     except HydraDBError as exc:
-        db.close()
+        if db is not None:
+            db.close()
         LOGGER.error("HydraMind startup failed: %s", exc)
         raise RuntimeError(f"HydraMind startup failed: {exc}") from exc
+    assert db is not None
     try:
-        source = os.getenv("HYDRAMIND_SOURCE") or "mcp"
-        yield RuntimeState(service=MemoryService(db, source=source))
+        try:
+            source = os.getenv("HYDRAMIND_SOURCE") or "mcp"
+            service = MemoryService(db, source=source)
+        except ValueError as exc:
+            LOGGER.error("HydraMind startup failed: invalid configuration: %s", exc)
+            raise RuntimeError(f"HydraMind startup failed: invalid configuration: {exc}") from exc
+        yield RuntimeState(service=service)
     finally:
         db.close()
 
@@ -72,14 +80,16 @@ def remember(
     entity_refs: list[str],
     ctx: Context[RuntimeState],
     derived_from: list[str] | None = None,
+    idempotency_key: str | None = None,
 ) -> str:
-    """Store durable memory and provenance, decaying stale graph claims when needed."""
+    """Store durable memory, with optional retry deduplication for fallible agent calls."""
 
     return ctx.request_context.lifespan_context.service.remember(
         content,
         scope,
         entity_refs,
         derived_from,
+        idempotency_key,
     )
 
 
@@ -155,10 +165,10 @@ def trace_memory(
 def check_conflict(
     content: str,
     entity_refs: list[str],
+    scope: str,
     ctx: Context[RuntimeState],
-    scope: str | None = None,
 ) -> list[ConflictResult]:
-    """Flag plausible contradictions before writing so agents can inspect revisions."""
+    """Flag plausible contradictions inside one explicit scope before an agent writes."""
 
     return ctx.request_context.lifespan_context.service.check_conflict(
         content,
@@ -170,10 +180,10 @@ def check_conflict(
 @mcp.tool()
 def explain_trust(
     memory_id: str,
+    scope: str,
     ctx: Context[RuntimeState],
-    scope: str | None = None,
 ) -> list[str]:
-    """Explain every persisted contradiction, supersession, and derived trust decay."""
+    """Explain persisted trust changes while enforcing a scoped direct-ID lookup."""
 
     return ctx.request_context.lifespan_context.service.explain_trust(memory_id, scope)
 
@@ -181,10 +191,10 @@ def explain_trust(
 @mcp.tool()
 def forget(
     memory_id: str,
+    scope: str,
     ctx: Context[RuntimeState],
-    scope: str | None = None,
 ) -> bool:
-    """Tombstone one memory without deleting its durable graph provenance."""
+    """Tombstone one scoped memory without deleting its durable graph provenance."""
 
     return ctx.request_context.lifespan_context.service.forget(memory_id, scope)
 

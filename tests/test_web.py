@@ -49,8 +49,10 @@ def test_seed_demo_showcases_revision_history(
     integration_context: tuple[MemoryService, str, str],
 ) -> None:
     _, scope, _ = integration_context
+    dashboard = DashboardService(live_db)
 
-    state = DashboardService(live_db).seed_demo(scope)
+    state = dashboard.seed_demo(scope)
+    recalled = dashboard.memories.recall("How should production route?", scope)
 
     assert len(state["revisions"]) == 1
     statuses = {memory["status"] for memory in state["memories"]}
@@ -58,3 +60,8 @@ def test_seed_demo_showcases_revision_history(
     assert any(
         memory["content"] == "Agent tooling runs on Python 3.13." for memory in state["memories"]
     )
+    assert [result["content"] for result in recalled] == [
+        "Production deploys must not use direct routing.",
+        "The release checklist is based on the production routing policy.",
+        "Production deploys must always use direct routing.",
+    ]

@@ -1,0 +1,25 @@
+{
+  "duration_seconds": 54.74623083299957,
+  "environment": {
+    "hydradb_commit": "6a2fbb192f37f51a93690a2ae2d2f5e27e6e4219",
+    "hydradb_uri": "neo4j://127.0.0.1:7687",
+    "hydramind": "0.3.0",
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "python": "3.12.11"
+  },
+  "generated_at": "2026-08-15T16:34:58Z",
+  "recall_max_ms": 41.86379100065096,
+  "recall_p50_ms": 40.141,
+  "recall_p95_ms": 41.42,
+  "recall_probes": 50,
+  "recall_targets_verified": 50,
+  "restart_recall_succeeded": true,
+  "unique_memory_ids": 250,
+  "write_duration_seconds": 52.66594845899999,
+  "write_max_ms": 4535.1112080006715,
+  "write_p50_ms": 1642.412,
+  "write_p95_ms": 2910.492,
+  "writes_per_second": 4.747,
+  "writes_requested": 250,
+  "writes_succeeded": 250
+}

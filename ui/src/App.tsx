@@ -45,6 +45,7 @@ const navigation = [
 function App() {
   const [view, setView] = useState<View>("graph");
   const [scope, setScope] = useState("acme-platform");
+  const [scopeDraft, setScopeDraft] = useState("acme-platform");
   const [graph, setGraph] = useState<GraphState>(emptyState);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -54,12 +55,15 @@ function App() {
   const [revisionTarget, setRevisionTarget] = useState<Memory | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const loadSequence = useRef(0);
 
-  const load = useCallback(async (nextScope = scope) => {
+  const load = useCallback(async (nextScope: string) => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     try {
       const [health, state] = await Promise.all([api.health(), api.state(nextScope)]);
+      if (sequence !== loadSequence.current) return;
       setConnected(health.connected);
       setGraph(state);
       setSelectedId((current) => {
@@ -67,16 +71,17 @@ function App() {
         return state.memories[0]?.id ?? null;
       });
     } catch (reason) {
+      if (sequence !== loadSequence.current) return;
       setConnected(false);
       setError(reason instanceof Error ? reason.message : "Unable to load HydraMind.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [scope]);
+  }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(scope);
+  }, [load, scope]);
 
   useEffect(() => {
     if (!toast) return;
@@ -107,7 +112,7 @@ function App() {
     try {
       await api.forget(scope, memoryId);
       setToast("Memory forgotten. Provenance was preserved.");
-      await load();
+      await load(scope);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to forget memory.");
     }
@@ -139,11 +144,18 @@ function App() {
           <label className="scope-control">
             <span>Scope</span>
             <input
-              value={scope}
-              onChange={(event) => setScope(event.target.value)}
-              onBlur={() => void load(scope)}
+              value={scopeDraft}
+              onChange={(event) => setScopeDraft(event.target.value)}
+              onBlur={() => {
+                const nextScope = scopeDraft.trim();
+                if (nextScope) setScope(nextScope);
+                else setScopeDraft(scope);
+              }}
               onKeyDown={(event) => {
-                if (event.key === "Enter") void load(scope);
+                if (event.key === "Enter") {
+                  const nextScope = scopeDraft.trim();
+                  if (nextScope) setScope(nextScope);
+                }
               }}
               aria-label="Memory scope"
             />
@@ -152,14 +164,14 @@ function App() {
             <span className="connection-dot" aria-hidden="true" />
             <span>{connected ? "HydraDB connected" : "HydraDB unavailable"}</span>
           </div>
-          <button className="secondary-button compact" type="button" onClick={() => void load()}>
+          <button className="secondary-button compact" type="button" onClick={() => void load(scope)}>
             <RefreshCw size={16} className={loading ? "spin" : ""} />
             Refresh
           </button>
         </header>
 
         {error ? (
-          <ErrorBanner message={error} onRetry={() => void load()} />
+          <ErrorBanner message={error} onRetry={() => void load(scope)} />
         ) : null}
 
         {loading && graph.memories.length === 0 ? (
@@ -227,7 +239,7 @@ function App() {
           onStored={async () => {
             setDialogOpen(false);
             setToast("Memory stored in HydraDB.");
-            await load();
+            await load(scope);
           }}
         />
       ) : null}
@@ -240,7 +252,7 @@ function App() {
           onRevised={async (memoryId) => {
             setRevisionTarget(null);
             setToast("Revision linked. The previous fact remains auditable.");
-            await load();
+            await load(scope);
             setSelectedId(memoryId);
           }}
         />
@@ -332,6 +344,7 @@ function GraphView({
 }) {
   const [fitKey, setFitKey] = useState(0);
   const nodes = useMemo(() => layoutNodes(graph.memories), [graph.memories, fitKey]);
+  const canvasHeight = Math.max(500, Math.ceil(nodes.length / 4) * 180 + 60);
   return (
     <section className="graph-panel">
       <div className="view-heading">
@@ -349,7 +362,8 @@ function GraphView({
         </div>
       </div>
       <div className="graph-canvas" key={fitKey}>
-        <svg className="edge-layer" viewBox="0 0 900 500" role="img" aria-label="Memory trust relationships">
+        <div className="graph-world" style={{ height: `${canvasHeight}px` }}>
+        <svg className="edge-layer" style={{ height: `${canvasHeight}px` }} viewBox={`0 0 900 ${canvasHeight}`} role="img" aria-label="Memory trust relationships">
           <defs>
             <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
               <path d="M0,0 L8,4 L0,8 Z" fill="var(--danger)" />
@@ -387,6 +401,7 @@ function GraphView({
             <span className="node-time">{relativeTime(node.memory.created_at)}</span>
           </button>
         ))}
+        </div>
       </div>
       <div className="mobile-node-list">
         {graph.memories.map((memory) => (
@@ -988,15 +1003,11 @@ function layoutNodes(memories: Memory[]): PositionedNode[] {
     const status = Number(a.status === "contradicted") - Number(b.status === "contradicted");
     return status || b.trust_score - a.trust_score;
   });
-  const positions = [
-    { x: 94, y: 82 },
-    { x: 346, y: 76 },
-    { x: 590, y: 84 },
-    { x: 220, y: 294 },
-    { x: 488, y: 298 },
-    { x: 704, y: 292 },
-  ];
-  return ordered.slice(0, 6).map((memory, index) => ({ memory, ...positions[index] }));
+  return ordered.map((memory, index) => ({
+    memory,
+    x: 40 + (index % 4) * 220,
+    y: 36 + Math.floor(index / 4) * 180,
+  }));
 }
 
 function splitValues(value: string) {
