@@ -151,9 +151,8 @@ def run_stress(*, writes: int, workers: int, recall_probes: int, keep: bool) -> 
                     {"scope": scope},
                 )
                 cleanup_db.execute_write(
-                    "MATCH (entity:Entity) WHERE entity.name STARTS WITH $prefix "
-                    "DETACH DELETE entity",
-                    {"prefix": prefix},
+                    "MATCH (entity:Entity) WHERE entity.scope = $scope DETACH DELETE entity",
+                    {"scope": scope},
                 )
 
 

@@ -41,11 +41,16 @@ def integration_context(live_db: HydraDB) -> Iterator[tuple[MemoryService, str, 
     try:
         yield service, scope, prefix
     finally:
+        other_scope = f"{prefix}:other-scope"
         live_db.execute_write(
-            "MATCH (memory:Memory) WHERE memory.scope STARTS WITH $prefix DETACH DELETE memory",
-            {"prefix": prefix},
+            "MATCH (memory:Memory) "
+            "WHERE memory.scope = $scope OR memory.scope = $other_scope "
+            "DETACH DELETE memory",
+            {"scope": scope, "other_scope": other_scope},
         )
         live_db.execute_write(
-            "MATCH (entity:Entity) WHERE entity.name STARTS WITH $prefix DETACH DELETE entity",
-            {"prefix": prefix},
+            "MATCH (entity:Entity) "
+            "WHERE entity.scope = $scope OR entity.scope = $other_scope "
+            "DETACH DELETE entity",
+            {"scope": scope, "other_scope": other_scope},
         )
