@@ -35,6 +35,7 @@ Security issues follow a separate, private process. See [SECURITY.md](SECURITY.m
 
 You need:
 
+- Linux or macOS (Windows is not supported yet)
 - Python 3.11 or newer
 - [`uv`](https://docs.astral.sh/uv/) (recommended), or `pip`
 - Node.js 22 and npm, only for UI changes

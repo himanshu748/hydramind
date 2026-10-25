@@ -95,6 +95,8 @@ evidence it returns `[]`, so the agent can abstain instead of inventing an answe
 
 ### Prerequisites
 
+- Linux or macOS. Windows is not supported yet because local write coordination uses
+  POSIX `fcntl` locks ([#29](https://github.com/himanshu748/hydramind/issues/29)).
 - Python **3.11+** and [`uv`](https://docs.astral.sh/uv/) (or plain `pip`).
 - A source-built HydraDB `graph-node` listening on `neo4j://127.0.0.1:7687`. See
   HydraDB's [local server instructions](https://github.com/hydra-db/hydradb#run-a-local-server).
@@ -429,6 +431,7 @@ Ideas where contributions are especially welcome:
 - [ ] Configurable decay constants and hop limits ([#7](https://github.com/himanshu748/hydramind/issues/7), [#8](https://github.com/himanshu748/hydramind/issues/8))
 - [ ] Packaged releases on PyPI ([#17](https://github.com/himanshu748/hydramind/issues/17))
 - [ ] Larger public benchmark runs, such as LongMemEval ([#27](https://github.com/himanshu748/hydramind/issues/27))
+- [ ] Windows support ([#29](https://github.com/himanshu748/hydramind/issues/29))
 - [ ] More MCP host setup guides ([#18](https://github.com/himanshu748/hydramind/issues/18), [#19](https://github.com/himanshu748/hydramind/issues/19))
 
 Browse [all open issues](https://github.com/himanshu748/hydramind/issues). Have another idea? [Open a feature request](https://github.com/himanshu748/hydramind/issues/new/choose).
