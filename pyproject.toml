@@ -10,10 +10,31 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "HydraMind contributors" }]
+keywords = ["mcp", "model-context-protocol", "agent-memory", "hydradb", "graph", "llm", "coding-agents"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
 dependencies = [
   "mcp>=2,<3",
   "neo4j>=5.28,<7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/himanshu748/hydramind"
+Repository = "https://github.com/himanshu748/hydramind"
+Issues = "https://github.com/himanshu748/hydramind/issues"
+Changelog = "https://github.com/himanshu748/hydramind/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

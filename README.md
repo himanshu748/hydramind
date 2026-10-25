@@ -1,141 +1,157 @@
-# HydraMind
+<div align="center">
 
-**Persistent memory that knows when it may be wrong.**
+# 🐉 HydraMind
 
-HydraMind is a Python MCP server for coding agents. It stores facts in HydraDB,
-connects them to the entities they describe, detects plausible revisions, and
-propagates lost trust through memory provenance. Recall combines a scoped graph
-match with a transparent text score; if there is no evidence, it returns an empty
-list so the agent can abstain instead of inventing an answer.
+**Persistent memory for coding agents that knows when it may be wrong.**
 
-Built for **Hack Hydra, Track 03: Memory + Context Retrieval** and the
-**Best Use of HydraDB** prize.
+A graph-native [MCP](https://modelcontextprotocol.io) server that stores facts in
+[HydraDB](https://github.com/hydra-db/hydradb), tracks contradictions and revisions,
+propagates lost trust through provenance, and abstains instead of hallucinating.
 
-Judges can start with the concise [Track 03 judge guide](TRACK03_JUDGE_GUIDE.md),
-which maps every official "strong work" signal to a live product behavior and a
-reproducible check.
+[![CI](https://github.com/himanshu748/hydramind/actions/workflows/ci.yml/badge.svg)](https://github.com/himanshu748/hydramind/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
+[![MCP 2026-07-28](https://img.shields.io/badge/MCP-2026--07--28-black.svg)](https://modelcontextprotocol.io)
+[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64.svg)](https://docs.astral.sh/ruff/)
+[![Types: mypy strict](https://img.shields.io/badge/types-mypy%20strict-2A6DB2.svg)](https://mypy-lang.org/)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-## Why this needs a graph
+[Quickstart](#-quickstart) ·
+[Tools](#-mcp-tools) ·
+[How it works](#-how-it-works) ·
+[Dashboard](#-dashboard) ·
+[Contributing](CONTRIBUTING.md) ·
+[Roadmap](#-roadmap)
 
-A vector store can retrieve similar sentences. It does not naturally answer
-"which downstream conclusions became less trustworthy when this fact changed?"
-HydraMind makes that dependency structure first-class:
+</div>
 
-```mermaid
-flowchart LR
-    New["new memory<br/>trust 1.00"] -->|"CONTRADICTS<br/>time + reason + trust delta"| Old["older memory<br/>trust 0.60"]
-    Child["derived memory<br/>trust 0.85"] -->|DERIVED_FROM| Old
-    Grandchild["two-hop derivative<br/>trust 0.70"] -->|DERIVED_FROM| Child
-    Prior["Tuesday fact<br/>superseded"] -->|"SUPERSEDED_BY<br/>valid_to + reason"| Current["Wednesday fact<br/>active"]
-    New -->|ABOUT| Entity["Entity"]
-    Old -->|ABOUT| Entity
-    Prior -->|ABOUT| Entity
-    Current -->|ABOUT| Entity
-```
+---
 
-When the new memory contradicts the older one, HydraMind lowers the old claim by
-`0.40`, then walks incoming `DERIVED_FROM` dependencies for two hops and lowers
-them by `0.15 × hop`. The graph preserves the contradiction, timestamp, reason,
-and provenance; `explain_trust` turns that history back into plain language.
+## Table of contents
 
-## What works
+- [Why HydraMind?](#-why-hydramind)
+- [Features](#-features)
+- [Quickstart](#-quickstart)
+- [Connect a coding agent](#-connect-a-coding-agent)
+- [MCP tools](#-mcp-tools)
+- [How it works](#-how-it-works)
+- [Dashboard](#-dashboard)
+- [Demo and evaluation](#-demo-and-evaluation)
+- [Configuration](#-configuration)
+- [Data model](#-data-model)
+- [Testing and quality](#-testing-and-quality)
+- [Project layout](#-project-layout)
+- [Limits and guarantees](#-limits-and-guarantees)
+- [Roadmap](#-roadmap)
+- [Contributing](#-contributing)
+- [Security](#-security)
+- [Acknowledgements and license](#-acknowledgements-and-license)
 
-- Eight MCP tools with typed schemas and judge-readable descriptions.
-- Sessionless MCP `2026-07-28` over stdio, plus explicitly stateless Streamable HTTP.
-- Official `neo4j` Python driver connected to HydraDB over Bolt, with no custom client.
-- Scoped and entity-filtered recall ranked by `trust_score × keyword_overlap`,
-  with a conservative 0.80 lexical evidence threshold.
-- Scope-specific entity identities and mandatory scope guards on every direct-ID tool.
-- Pre-write conflict detection using a small, replaceable polarity heuristic.
-- Contradiction edges, trust decay with a `0.05` floor, and two-hop lineage decay.
-- Explicit fact revision with `valid_from`/`valid_to`, a dated and reasoned
-  `SUPERSEDED_BY` edge, and inherited entity links.
-- Entity timelines that keep superseded facts auditable while recall returns the
-  current version by default.
-- Scope-safe evidence tracing through HydraDB's native `algo.SSpaths` engine over
-  `ABOUT`, `CONTRADICTS`, `DERIVED_FROM`, and `SUPERSEDED_BY` relationships.
-- Optional `derived_from` memory IDs on `remember`, so agents can create real
-  provenance without needing another tool.
-- Explainable trust history and non-destructive forgetting.
-- Retry-safe writes through optional idempotency keys, plus bounded inputs and local
-  cross-process writer coordination.
-- Explicit lexical abstention: insufficient keyword evidence returns `[]`, including
+## 💡 Why HydraMind?
+
+Agents forget between sessions. Worse, the memory tools that fix that tend to treat
+every stored sentence as equally true forever. When a fact changes, the old claim
+and everything concluded from it keep ranking just as high.
+
+HydraMind treats **uncertainty, revisions, and provenance as graph data**:
+
+| Question | Plain vector store | HydraMind |
+|---|---|---|
+| "What is similar to this text?" | ✅ | ✅ (transparent lexical score) |
+| "Which conclusions became less trustworthy when this fact changed?" | ❌ | ✅ `DERIVED_FROM` trust cascade |
+| "What did we believe on Tuesday, and why did it change?" | ❌ | ✅ `SUPERSEDED_BY` timeline |
+| "Show me the evidence behind this answer." | ❌ | ✅ native `algo.SSpaths` traces |
+| "I don't know." | Rarely | ✅ empty result below 0.80 evidence |
+
+Recall combines a scoped graph match with a transparent text score. If there is no
+evidence it returns `[]`, so the agent can abstain instead of inventing an answer.
+
+> Built for **Hack Hydra, Track 03: Memory + Context Retrieval** and the **Best Use
+> of HydraDB** prize. Judges can start with the
+> [Track 03 judge guide](TRACK03_JUDGE_GUIDE.md).
+
+## ✨ Features
+
+- **Eight MCP tools** with typed schemas: `remember`, `recall`, `revise`, `timeline`,
+  `trace_memory`, `check_conflict`, `explain_trust`, `forget`.
+- **Sessionless MCP `2026-07-28`** over stdio, plus explicitly stateless Streamable HTTP.
+- **Trust that moves.** Contradictions lower the older claim by `0.40`, then lower its
+  dependents for two hops by `0.15 × hop`, with a `0.05` floor.
+- **Explicit time.** `revise` closes `valid_to`, writes a dated, reasoned
+  `SUPERSEDED_BY` edge, and keeps the old fact auditable.
+- **Evidence traces** through HydraDB's native `algo.SSpaths` engine, with scope guards.
+- **First-class abstention.** Insufficient keyword evidence returns `[]`, including
   tested domain-overlap hard negatives.
-- Clear startup failures when HydraDB or its auth token is unavailable.
-- Unit, live Bolt, real MCP stdio, stateless HTTP, restart, and concurrency tests.
+- **Retry-safe writes.** Idempotency keys repair interrupted writes without applying
+  decay twice.
+- **No embeddings, no hosted model calls,** and no per-token bill on the retrieval path.
+- **Live React dashboard** on the same memory service. Every trust change you see is
+  persisted in HydraDB.
+- **Docker is not required** anywhere.
+- **Tested:** unit, live Bolt, real MCP stdio, stateless HTTP, restart, and concurrency
+  tests, plus a repeatable stress gate.
 
-## Prerequisites
+## 🚀 Quickstart
 
-- Python 3.11 or newer.
-- A source-built `graph-node` already listening on `neo4j://127.0.0.1:7687`.
-- The auth token used to start that node.
+### Prerequisites
 
-**Docker is not required anywhere in this project.** If `graph-node` is not
-already running, use HydraDB's official
-[source-native local server instructions](https://github.com/hydra-db/hydradb#run-a-local-server).
+- Linux or macOS. Windows is not supported yet because local write coordination uses
+  POSIX `fcntl` locks ([#29](https://github.com/himanshu748/hydramind/issues/29)).
+- Python **3.11+** and [`uv`](https://docs.astral.sh/uv/) (or plain `pip`).
+- A source-built HydraDB `graph-node` listening on `neo4j://127.0.0.1:7687`. See
+  HydraDB's [local server instructions](https://github.com/hydra-db/hydradb#run-a-local-server).
+- The auth token that `graph-node` reads from `GRAPH_AUTH_TOKEN_FILE`.
 
 HydraMind was checked against HydraDB commit
 [`6a2fbb1`](https://github.com/hydra-db/hydradb/commit/6a2fbb192f37f51a93690a2ae2d2f5e27e6e4219)
-from August 13, 2026. Its native build check, smoke test, and runtime smoke script
-all passed before HydraMind's Bolt, transport, browser, and stress gates were run.
+(August 13, 2026).
 
-## Install
-
-With `uv`:
+### 1. Install
 
 ```bash
+git clone https://github.com/himanshu748/hydramind.git
+cd hydramind
 uv sync --extra dev --locked
 ```
 
-Or with the standard library and pip:
+<details>
+<summary>Without uv</summary>
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
 ```
 
-Set the same token that `graph-node` reads from `GRAPH_AUTH_TOKEN_FILE`:
+</details>
+
+### 2. Point it at HydraDB
 
 ```bash
 export HYDRAMIND_TOKEN='local-development-token-32-bytes'
-```
 
-Confirm the actual Bolt connection before starting MCP:
-
-```bash
 .venv/bin/python -c 'from hydramind.db import HydraDB; db = HydraDB(); db.verify_connection(); db.setup_schema(); print("HydraDB Bolt connection OK"); db.close()'
 ```
 
-Then start the stdio server:
+All settings are listed in [Configuration](#-configuration) and
+[`.env.example`](.env.example).
 
-```bash
-.venv/bin/hydramind
-```
+### 3. Run
 
-The process waits silently for MCP messages on stdin. Logs and actionable startup
-errors go to stderr so they do not corrupt the protocol stream.
+| Command | What it starts |
+|---|---|
+| `.venv/bin/hydramind` | MCP server over stdio. It waits silently for MCP messages; logs go to stderr. |
+| `.venv/bin/hydramind-http` | Stateless Streamable HTTP MCP at `http://127.0.0.1:8788/mcp`. |
+| `.venv/bin/hydramind-ui` | Landing page at `http://127.0.0.1:8787/` and live dashboard at `/app`. |
+| `.venv/bin/python examples/demo.py` | End-to-end terminal demo on an isolated graph. |
 
 HydraMind uses the official MCP Python SDK v2 and negotiates the sessionless
-`2026-07-28` protocol. Requests do not depend on an MCP handshake or server-side
-session. The process keeps only reusable infrastructure, the Neo4j driver pool and
-memory service, while every durable fact, relationship, and trust event lives in
-HydraDB. See the official SDK's
+`2026-07-28` protocol, so requests never depend on a handshake or server-side session.
+Every durable fact, relationship, and trust event lives in HydraDB. See the SDK's
 [MCP 2.0 changes](https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/whats-new.md).
 
-To expose the same tools over stateless Streamable HTTP:
+## 🔌 Connect a coding agent
 
-```bash
-.venv/bin/hydramind-http
-```
-
-The endpoint is `http://127.0.0.1:8788/mcp`. HydraMind forces JSON responses and
-`stateless_http=True` for legacy clients, so a fresh client can recall data written
-by another client without inheriting transport state. Set a different bind address
-only when you have also added authentication at a trusted local gateway.
-
-## Attach a coding agent
-
-Codex CLI:
+**Codex CLI**
 
 ```bash
 codex mcp add hydramind \
@@ -144,8 +160,7 @@ codex mcp add hydramind \
   -- /absolute/path/to/hydramind/.venv/bin/hydramind
 ```
 
-For JSON-style MCP hosts such as Claude Desktop or Cursor, add this server entry
-and restart the host:
+**Claude Desktop, Cursor, and other JSON-configured hosts**
 
 ```json
 {
@@ -163,23 +178,27 @@ and restart the host:
 }
 ```
 
-For anything beyond local development, inject the token through the host's secret
-management instead of committing it to a config file.
+Restart the host after editing. Outside local development, inject the token through
+the host's secret management instead of committing it to a config file.
 
-## MCP tools
+**HTTP clients:** use `http://127.0.0.1:8788/mcp`. HydraMind forces JSON responses and
+`stateless_http=True`, so a fresh client can recall data written by another client.
+Bind to a non-loopback address only behind an authenticated gateway.
+
+## 🧰 MCP tools
 
 | Tool | Behavior |
 |---|---|
-| `remember(content, scope, entity_refs, derived_from?, idempotency_key?)` | Writes a trust-1.0 memory, `ABOUT` edges, optional lineage, and any detected contradiction plus cascading trust decay. Retrying the same key repairs any unfinished apply phases and returns the original ID without repeating decay; reusing it with another payload is rejected. |
-| `recall(query, scope, entity_refs?, limit=10)` | Filters in Cypher by scope and optional entity IDs, normalizes question words and light word variants, omits candidates below 0.80 keyword coverage, then ranks by trust times keyword overlap. Returns content, trust, status, and creation time. |
-| `revise(memory_id, content, scope, reason?, entity_refs?)` | Replaces an active fact without erasing it. The old node becomes `superseded`, temporal validity is closed, and a reasoned `SUPERSEDED_BY` edge points to the trust-1.0 revision. Entity links are inherited unless replacements are supplied. |
-| `timeline(scope, entity_ref, limit=20)` | Returns the entity's current and superseded facts in chronological order with validity bounds and revision links. |
+| `remember(content, scope, entity_refs, derived_from?, idempotency_key?)` | Writes a trust-1.0 memory, `ABOUT` edges, optional lineage, and any detected contradiction plus cascading trust decay. Retrying the same key repairs unfinished apply phases and returns the original ID without repeating decay. Reusing a key with a different payload is rejected. |
+| `recall(query, scope, entity_refs?, limit=10)` | Filters in Cypher by scope and optional entity IDs, normalizes question words and light word variants, omits candidates below 0.80 keyword coverage, then ranks by trust × keyword overlap. |
+| `revise(memory_id, content, scope, reason?, entity_refs?)` | Replaces an active fact without erasing it. The old node becomes `superseded`, its validity closes, and a reasoned `SUPERSEDED_BY` edge points to the trust-1.0 revision. Entity links are inherited unless replacements are supplied. |
+| `timeline(scope, entity_ref, limit=20)` | An entity's current and superseded facts in chronological order, with validity bounds and revision links. |
 | `trace_memory(memory_id, scope, max_hops=2, max_paths=20)` | Calls HydraDB's native bounded single-source path engine and returns hydrated evidence paths. Paths containing an out-of-scope `Memory` are discarded. |
 | `check_conflict(content, entity_refs, scope)` | Finds active memories about the same scoped entities and flags plausible opposite polarity, with a readable reason. |
-| `explain_trust(memory_id, scope)` | Walks `CONTRADICTS`, `SUPERSEDED_BY`, and durable derived-decay events, then narrates the ordered trust history. |
-| `forget(memory_id, scope)` | Sets status to `forgotten`; it does not delete the node or break provenance edges. |
+| `explain_trust(memory_id, scope)` | Walks `CONTRADICTS`, `SUPERSEDED_BY`, and durable decay events, then narrates the ordered trust history. |
+| `forget(memory_id, scope)` | Sets status to `forgotten` without deleting the node or breaking provenance edges. |
 
-Example agent behavior:
+### Example session
 
 ```text
 remember("Production deploys must always use direct routing.", "acme", ["deploy-policy"])
@@ -191,122 +210,100 @@ timeline("acme", "agent-runtime")
 trace_memory(root_id, "acme")
 ```
 
-The revision remains at trust `1.0`, the older claim becomes `contradicted` at
+The newest claim stays at trust `1.0`, the older claim becomes `contradicted` at
 `0.6`, and the dependent checklist loses `0.15`. Both claims remain auditable.
 
-## Run the graph-native demo
+## 🧠 How it works
 
-With local HydraDB running and `HYDRAMIND_TOKEN` set:
-
-```bash
-.venv/bin/python examples/demo.py
+```mermaid
+flowchart LR
+    New["new memory<br/>trust 1.00"] -->|"CONTRADICTS<br/>time + reason + trust delta"| Old["older memory<br/>trust 0.60"]
+    Child["derived memory<br/>trust 0.85"] -->|DERIVED_FROM| Old
+    Grandchild["two-hop derivative<br/>trust 0.70"] -->|DERIVED_FROM| Child
+    Prior["Tuesday fact<br/>superseded"] -->|"SUPERSEDED_BY<br/>valid_to + reason"| Current["Wednesday fact<br/>active"]
+    New -->|ABOUT| Entity["Entity"]
+    Old -->|ABOUT| Entity
+    Prior -->|ABOUT| Entity
+    Current -->|ABOUT| Entity
 ```
 
-The script creates an isolated graph, demonstrates two-hop provenance, catches a
-revision before write, shows trust propagation and ranking, explains the old
-claim, proves abstention, and cleans up. Add `--keep` to retain the isolated graph
-for inspection.
+1. **Write.** `remember` links the memory to scoped entities and optional parents.
+2. **Detect.** A small, replaceable polarity heuristic
+   ([`conflict.py`](src/hydramind/conflict.py)) checks active same-entity memories
+   before the write.
+3. **Propagate.** On contradiction, the older claim drops by `0.40`, and incoming
+   `DERIVED_FROM` dependents drop by `0.15 × hop` for two hops. Each drop is stored as
+   an immutable `TRUST_DECAY` event.
+4. **Recall.** Candidates in scope are scored by `trust_score × keyword_overlap`.
+   Anything below 0.80 coverage is dropped, so an empty list means "no evidence".
+5. **Explain.** `explain_trust` and `trace_memory` turn the graph back into plain
+   language and evidence paths.
 
-A tight three-minute judging flow is:
-
-1. Show the `Memory`/`Entity` graph and two-hop `DERIVED_FROM` chain.
-2. Insert an opposing production policy and show the persisted `CONTRADICTS` edge.
-3. Show trust changing from `1.0 → 0.6`, `1.0 → 0.85`, and `1.0 → 0.70`.
-4. Revise the runtime fact and show the dated `SUPERSEDED_BY` timeline.
-5. Trace a memory through native `algo.SSpaths`, then ask for absent information and get `[]`.
-
-For a machine-readable judge check, run the six-case Track 03 smoke evaluation:
-
-```bash
-HYDRAMIND_TOKEN=local-development-token-32-bytes \
-  .venv/bin/python -m benchmarks.track03_eval
+```mermaid
+flowchart TB
+    Agent["Coding agent<br/>(Codex, Claude, Cursor, ...)"] -->|MCP stdio / stateless HTTP| Server["hydramind.server"]
+    Browser["Browser"] -->|JSON API| Web["hydramind.web<br/>+ React dashboard"]
+    Server --> Service["MemoryService<br/>hydramind.tools"]
+    Web --> Service
+    Service --> Conflict["conflict.py<br/>polarity heuristic"]
+    Service -->|official neo4j driver, Bolt| HydraDB[("HydraDB<br/>graph-node")]
 ```
 
-It covers cross-service continuity, explicit chronology, missing-information
-abstention, contradiction decay, two-hop provenance decay, and native evidence
-tracing. A representative raw passing run is checked in at
-[`benchmarks/results/track03-evaluation.json`](benchmarks/results/track03-evaluation.json).
-This is a
-small reproducible smoke evaluation, not a claim of LongMemEval or vector-store
-superiority.
+## 📊 Dashboard
 
-## Open the landing page and live graph
-
-The React interface is a code-native companion to the MCP server. Its landing
-page explains why trust-weighted graph memory matters, and `/app` is a working
-HydraDB dashboard where judges can recall, remember, revise facts, inspect entity
-timelines, run native evidence traces, explain trust, and forget memories without
-leaving the demo.
-
-The production interface is included in the repository and Python package, so it
-works immediately after the Python install. Start the local server with HydraDB
-and `HYDRAMIND_TOKEN` already configured:
+The React interface ships prebuilt inside the repository and Python package, so it
+works right after install:
 
 ```bash
 .venv/bin/hydramind-ui
 ```
 
-Only rebuild the interface after changing its source:
+- [http://127.0.0.1:8787/](http://127.0.0.1:8787/): landing page with an interactive trust cascade.
+- [http://127.0.0.1:8787/app](http://127.0.0.1:8787/app): live HydraDB dashboard to
+  seed a demo graph, recall, remember, revise, inspect timelines, run native traces,
+  explain trust, and forget.
+
+The UI uses the same Python memory service as the MCP tools. To work on the UI
+itself, see [UI development](CONTRIBUTING.md#ui-development).
+
+## 🎬 Demo and evaluation
+
+With HydraDB running and `HYDRAMIND_TOKEN` set:
 
 ```bash
-cd ui
-npm ci
-npm run build
-cd ..
+.venv/bin/python examples/demo.py          # add --keep to retain the isolated graph
+.venv/bin/python -m benchmarks.track03_eval
 ```
 
-Open [http://127.0.0.1:8787/](http://127.0.0.1:8787/) for the landing page or
-[http://127.0.0.1:8787/app](http://127.0.0.1:8787/app) for the live graph. The UI
-uses the same Python memory service as the MCP tools, so every visible trust
-change is persisted in HydraDB rather than simulated client state.
+The demo creates an isolated graph, shows two-hop provenance, catches a revision
+before write, shows trust propagation and ranking, explains the old claim, proves
+abstention, and cleans up.
 
-## Data model
+The six-case Track 03 evaluation covers cross-service continuity, explicit chronology,
+missing-information abstention, contradiction decay, two-hop provenance decay, and
+native evidence tracing. A raw passing run is checked in at
+[`benchmarks/results/track03-evaluation.json`](benchmarks/results/track03-evaluation.json).
+It is a small reproducible smoke evaluation, not a LongMemEval result or a claim of
+superiority over vector stores.
 
-```text
-(:Memory {
-  id, content, source, created_at, valid_from, valid_to,
-  scope, trust_score, status, write_phase
-})
-(:Entity {id, name, kind, scope})
+<details>
+<summary>A three-minute walkthrough</summary>
 
-(:Memory)-[:ABOUT]->(:Entity)
-(:Memory)-[:CONTRADICTS {
-  detected_at, reason, before_trust, after_trust, apply_status
-}]->(:Memory)
-(:Memory)-[:SUPERSEDED_BY {
-  revised_at, reason
-}]->(:Memory)
-(:Memory)-[:DERIVED_FROM {
-  last_decayed_at, last_decay_reason, before_trust, after_trust,
-  decay_hop, caused_by
-}]->(:Memory)
-(:Memory)-[:TRUST_DECAY {
-  detected_at, reason, before_trust, after_trust, hop, caused_by, apply_status
-}]->(:Memory)
-```
+1. Show the `Memory`/`Entity` graph and the two-hop `DERIVED_FROM` chain.
+2. Insert an opposing production policy and show the persisted `CONTRADICTS` edge.
+3. Show trust changing `1.0 → 0.6`, `1.0 → 0.85`, and `1.0 → 0.70`.
+4. Revise the runtime fact and show the dated `SUPERSEDED_BY` timeline.
+5. Trace a memory through native `algo.SSpaths`, then ask for absent information and get `[]`.
 
-External memory IDs are strings because JSON and JavaScript cannot represent every
-63-bit integer safely; HydraDB stores them as non-negative integer vertex IDs.
-Entity IDs are stable 63-bit hashes of scope plus name, so identical names cannot
-bridge scopes. Each `TRUST_DECAY` edge is an immutable event; the summary fields on
-`DERIVED_FROM` remain useful for graph inspection without overwriting its history.
-Keyed writes and their trust events carry durable apply phases, so a retry can
-repair an interrupted multi-statement operation without applying decay twice.
+</details>
 
-HydraDB currently uses schema-on-write and does not support `CREATE CONSTRAINT`,
-so startup creates a versioned `HydraMindSchema` marker instead of issuing
-unsupported DDL. Writes use `session.run(...)` auto-commit statements because the
-current Bolt runtime does not support explicit transactions. Queries intentionally
-stay within HydraDB's documented
-[Cypher compatibility surface](https://github.com/hydra-db/hydradb/blob/main/cypher-compat.md).
-
-## Configuration
+## 🔧 Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `HYDRAMIND_URI` | `neo4j://127.0.0.1:7687` | HydraDB Bolt URI |
 | `HYDRAMIND_USERNAME` | `neo4j` | Bolt username |
-| `HYDRAMIND_TOKEN` | unset | Preferred local auth token |
+| `HYDRAMIND_TOKEN` | unset | Preferred auth token |
 | `HYDRAMIND_PASSWORD` | unset | Fallback if `HYDRAMIND_TOKEN` is absent |
 | `HYDRAMIND_DATABASE` | `default` | Graph/database name |
 | `HYDRAMIND_SOURCE` | `mcp` | Value stored in `Memory.source` |
@@ -317,56 +314,65 @@ stay within HydraDB's documented
 | `HYDRAMIND_UI_HOST` | `127.0.0.1` | Dashboard bind address |
 | `HYDRAMIND_UI_PORT` | `8787` | Dashboard port |
 
-## Cost and scale boundaries
+HydraMind reads these from the process environment. To load
+[`.env.example`](.env.example) after copying it to `.env`, run
+`set -a; . ./.env; set +a`. Startup fails clearly when HydraDB or its token is
+unavailable.
 
-HydraMind makes no embedding or hosted-model call, so the core retrieval path has
-no per-token API bill. Recall asks HydraDB for every active or contradicted candidate
-in the selected scope, returns at most 100 after ranking, and performs only a set-overlap
-score in Python; candidates below 0.80 query-keyword coverage are omitted. Conflict checks scan active same-entity candidates in the selected
-scope. This favors retrieval correctness over a silent recency cutoff. Trust
-propagation is deliberately bounded to two graph hops. Native evidence traces are
-bounded to three hops and 100 hydrated paths. These are explicit safety
-limits, not claims of unlimited scale; a future benchmark should tune them against
-measured quality and latency.
+## 🗂 Data model
 
-## Tests and quality checks
+```text
+(:Memory {
+  id, content, source, created_at, valid_from, valid_to,
+  scope, trust_score, status, write_phase
+})
+(:Entity {id, name, kind, scope})
 
-Fast tests do not require HydraDB:
-
-```bash
-.venv/bin/pytest -m 'not integration'
+(:Memory)-[:ABOUT]->(:Entity)
+(:Memory)-[:CONTRADICTS {detected_at, reason, before_trust, after_trust, apply_status}]->(:Memory)
+(:Memory)-[:SUPERSEDED_BY {revised_at, reason}]->(:Memory)
+(:Memory)-[:DERIVED_FROM {
+  last_decayed_at, last_decay_reason, before_trust, after_trust, decay_hop, caused_by
+}]->(:Memory)
+(:Memory)-[:TRUST_DECAY {
+  detected_at, reason, before_trust, after_trust, hop, caused_by, apply_status
+}]->(:Memory)
 ```
 
-Run everything against the local Bolt endpoint:
+- External memory IDs are strings, because JSON and JavaScript cannot safely represent
+  every 63-bit integer. HydraDB stores them as non-negative integer vertex IDs.
+- Entity IDs are stable 63-bit hashes of scope plus name, so identical names cannot
+  bridge scopes.
+- Each `TRUST_DECAY` edge is an immutable event. The summary fields on `DERIVED_FROM`
+  support quick inspection without overwriting history.
+- HydraDB uses schema-on-write and does not support `CREATE CONSTRAINT`, so startup
+  creates a versioned `HydraMindSchema` marker. Writes use `session.run(...)`
+  auto-commit statements because the current Bolt runtime has no explicit
+  transactions. Queries stay within HydraDB's documented
+  [Cypher compatibility surface](https://github.com/hydra-db/hydradb/blob/main/cypher-compat.md).
+
+## 🧪 Testing and quality
 
 ```bash
-HYDRAMIND_TOKEN=local-development-token-32-bytes .venv/bin/pytest
+.venv/bin/pytest -m 'not integration'                                  # no database needed
+HYDRAMIND_TOKEN=local-development-token-32-bytes .venv/bin/pytest      # full live suite
+.venv/bin/ruff check src tests examples
+.venv/bin/ruff format --check src tests examples
+.venv/bin/mypy src
 ```
 
-The live integration suite verifies graph writes, scoped recall, entity filtering,
-ranking, abstention, contradiction decay, two-hop derived decay, trust
-explanations, explicit revision chronology, scope-safe native path tracing,
-non-destructive forgetting, a real MCP client/server stdio round trip, persistence
-across separate server processes, stateless HTTP across fresh clients, concurrent
-HTTP writes, cross-process contradictory writes and revision races, idempotent
-retries, durable repeated trust events, the real dashboard HTTP handler, dashboard
-graph state, and the six-case Track 03 evaluation.
+The live suite covers graph writes, scoped recall, entity filtering, ranking,
+abstention, contradiction and two-hop decay, trust explanations, revision chronology,
+scope-safe native tracing, non-destructive forgetting, real MCP stdio and stateless
+HTTP round trips, persistence across processes, concurrent and cross-process write
+races, idempotent retries with failures injected at five auto-commit boundaries, the
+dashboard HTTP handler, and the Track 03 evaluation.
 
-The August 15, 2026 full run is **48 tests**: 18 database-independent tests and 30 tests
-that require the live Bolt endpoint. Three of those exercise real MCP transports
-(two stdio and one stateless HTTP); the rest test the graph service and dashboard
-API directly. The live suite injects failures at five auto-commit boundaries and
-proves an idempotent retry completes the missing graph and trust work exactly once.
-Regenerated coverage is **91% for the MCP and HydraDB core**. A local manual browser
-pass separately verified landing → dashboard → demo seed →
-trust-weighted recall → trust explanation → native trace → scoped graph switching;
-CI builds the production UI and runs the database-independent 18-test subset. The
-manual browser pass is not presented as an automated CI result.
+**Baseline (August 15, 2026):** 48 tests (18 database-independent, 30 live), 91%
+coverage of the MCP and HydraDB core. CI rebuilds the UI and checks it matches
+`ui/dist`, then runs Ruff, mypy, the database-independent tests, and `uv build`.
 
-## Repeatable stress gate
-
-The stress runner uses the real `MemoryService`, concurrent writers, scoped recall,
-and a brand-new driver after the write phase:
+### Stress gate
 
 ```bash
 HYDRAMIND_TOKEN=local-development-token-32-bytes \
@@ -375,69 +381,93 @@ HYDRAMIND_TOKEN=local-development-token-32-bytes \
   --output benchmarks/results/product-stress-250.json
 ```
 
-On the source-built local HydraDB node pinned above, the sustainable profile wrote
-250/250 unique memories at 4.747 writes/second with 2,910.492 ms write p95,
-verified 50/50 exact recall targets at 40.141 ms p50 and 41.420 ms p95, and recalled
-the exact target after a fresh-driver restart. The provenance-stamped raw result is
-checked in at
-[`benchmarks/results/product-stress-250.json`](benchmarks/results/product-stress-250.json).
-This is a durability/backpressure measurement, not an unlimited-throughput claim;
-results vary with local hardware and store compaction state.
+On the pinned local HydraDB node this wrote 250/250 unique memories at 4.747
+writes/s (2,910 ms write p95), verified 50/50 exact recall targets at 40.1 ms p50 and
+41.4 ms p95, and recalled the target after a fresh-driver restart. The raw result is
+at [`benchmarks/results/product-stress-250.json`](benchmarks/results/product-stress-250.json).
+It measures durability and backpressure on one machine, not maximum throughput.
 
-```bash
-.venv/bin/ruff check src tests examples
-.venv/bin/ruff format --check src tests examples
-.venv/bin/mypy src
-```
-
-## Project layout
+## 📁 Project layout
 
 ```text
-src/hydramind/db.py        HydraDB connection, Bolt errors, schema marker
-src/hydramind/conflict.py  Replaceable conflict heuristic
-src/hydramind/tools.py     Memory graph and the eight tool implementations
-src/hydramind/server.py    MCPServer v2 tools, sessionless stdio, stateless HTTP
-src/hydramind/web.py       Local JSON API and landing/dashboard server
-benchmarks/track03_eval.py Six-case live Track 03 smoke evaluation
-benchmarks/product_stress.py Repeatable concurrent write/recall/restart stress gate
-ui/src/BrandMark.tsx       Custom graph-hydra identity mark
-ui/src/LandingPage.tsx     Product landing page and trust cascade interaction
-ui/src/App.tsx             Live HydraDB trust graph dashboard
-examples/demo.py           Repeatable judge-facing trust propagation story
-tests/test_mcp_stdio.py     Protocol negotiation and process restart persistence
-tests/test_mcp_http.py      Fresh-client persistence and concurrent stateless writes
-tests/                     Unit, live HydraDB, and transport tests
-design.md                  Required design system for any future visual surface
+src/hydramind/
+  db.py          HydraDB connection, Bolt errors, schema marker
+  conflict.py    Replaceable conflict heuristic
+  tools.py       Memory graph and the eight tool implementations
+  server.py      MCP server v2 tools, sessionless stdio, stateless HTTP
+  web.py         Local JSON API and landing/dashboard server
+ui/src/          React + Vite + TypeScript dashboard (built output in ui/dist)
+examples/        Terminal demo
+benchmarks/      Track 03 evaluation, stress gate, checked-in results
+tests/           Unit, live HydraDB, MCP transport, and web tests
+design.md        Design system for visual surfaces
 ```
 
-## Deliberate limits
+## 🧭 Limits and guarantees
 
-- Conflict detection is lexical, not semantic. It is isolated in `conflict.py`
-  specifically so an LLM classifier can replace it later.
-- Text relevance is keyword overlap, not an embedding model. Trust and graph
-  structure stay independently inspectable.
-- HydraDB's current auto-commit-only Bolt surface means multi-statement writes are
-  coordinated across local HydraMind processes. A keyed `remember` retry repairs
-  recorded-but-unfinished phases, but unkeyed writes and revisions are not
-  crash-atomic; this is not a distributed transaction.
-- Scope is a required data partition and query guard, not authentication or tenant
-  authorization. Put an authenticated gateway in front of remote multi-user use.
-- Recall scores every non-forgotten, non-superseded candidate in the selected scope;
-  very large deployments should partition scopes and benchmark their own latency.
-- Native trace isolation uses scope-specific Entity IDs, bounded overfetch, and a
-  final path guard that omits any path containing an out-of-scope memory.
+These limits are deliberate and documented so you can tell what is guaranteed from
+what is future work.
 
-## Attribution
+- **Lexical, not semantic.** Conflict detection and relevance use transparent keyword
+  heuristics. `conflict.py` isolates the classifier so it can be replaced.
+- **Bounded graph work.** Trust propagation stops at two hops. Traces stop at three
+  hops and 100 paths. Recall returns at most 100 ranked results.
+- **Recall scans the scope.** Every eligible candidate in a scope is scored. Large
+  deployments should partition scopes and benchmark latency.
+- **Not crash-atomic.** HydraDB's Bolt surface is auto-commit only. Local writers are
+  coordinated, and keyed `remember` retries repair unfinished phases. Unkeyed writes
+  and revisions are not distributed transactions.
+- **Scope is not auth.** Scope partitions and guards queries. It is not authentication
+  or tenant authorization. Put an authenticated gateway in front of any remote,
+  multi-user deployment.
 
-HydraMind is original hackathon work built on open-source infrastructure. HydraDB
-is an external AGPL-3.0 graph database; HydraMind communicates with it over Bolt
-and does not vendor its source. The Python server uses the MIT-licensed MCP SDK
-and the Apache-2.0/Python-2.0 Neo4j driver. The interface uses React, Vite,
-TypeScript, and Lucide under their respective open-source licenses. Bundled Inter,
-IBM Plex Mono, and Space Grotesk font files are distributed under the SIL Open
-Font License. Exact dependency versions and package license metadata are recorded
-in `uv.lock` and `ui/package-lock.json`.
+## 🗺 Roadmap
 
-## License
+Ideas where contributions are especially welcome:
 
-MIT
+- [ ] Pluggable semantic conflict classifier behind the `conflict.py` interface ([#9](https://github.com/himanshu748/hydramind/issues/9))
+- [ ] Optional embedding-assisted recall that keeps the abstention guarantee ([#11](https://github.com/himanshu748/hydramind/issues/11))
+- [ ] Indexed candidate selection for very large scopes ([#14](https://github.com/himanshu748/hydramind/issues/14), [#15](https://github.com/himanshu748/hydramind/issues/15))
+- [ ] Configurable decay constants and hop limits ([#7](https://github.com/himanshu748/hydramind/issues/7), [#8](https://github.com/himanshu748/hydramind/issues/8))
+- [ ] Packaged releases on PyPI ([#17](https://github.com/himanshu748/hydramind/issues/17))
+- [ ] Larger public benchmark runs, such as LongMemEval ([#27](https://github.com/himanshu748/hydramind/issues/27))
+- [ ] Windows support ([#29](https://github.com/himanshu748/hydramind/issues/29))
+- [ ] More MCP host setup guides ([#18](https://github.com/himanshu748/hydramind/issues/18), [#19](https://github.com/himanshu748/hydramind/issues/19))
+
+Browse [all open issues](https://github.com/himanshu748/hydramind/issues). Have another idea? [Open a feature request](https://github.com/himanshu748/hydramind/issues/new/choose).
+
+## 🤝 Contributing
+
+Contributions of all sizes are welcome, from typo fixes to new retrieval strategies.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for setup, workflow, and coding
+standards, and look for issues labelled
+[`good first issue`](https://github.com/himanshu748/hydramind/labels/good%20first%20issue).
+
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Notable changes are recorded in the [changelog](CHANGELOG.md).
+
+## 🔒 Security
+
+Please do **not** open public issues for vulnerabilities. See
+[SECURITY.md](SECURITY.md) for private reporting.
+
+## 🙏 Acknowledgements and license
+
+HydraMind started as original Hack Hydra hackathon work. It builds on:
+
+- [HydraDB](https://github.com/hydra-db/hydradb): external AGPL-3.0 software accessed
+  over Bolt, not vendored.
+- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) (MIT) and the
+  [Neo4j Python driver](https://github.com/neo4j/neo4j-python-driver) (Apache-2.0).
+- React, Vite, TypeScript, and Lucide for the UI. Bundled Inter, IBM Plex Mono, and
+  Space Grotesk fonts use the SIL Open Font License.
+
+Dependency versions and license metadata are in `uv.lock` and `ui/package-lock.json`.
+
+HydraMind is released under the [MIT License](LICENSE).
+
+<div align="center">
+
+If HydraMind helps your agents remember responsibly, please ⭐ the repo.
+
+</div>
