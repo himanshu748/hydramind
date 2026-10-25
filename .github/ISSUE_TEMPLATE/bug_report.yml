@@ -1,0 +1,73 @@
+name: Bug report
+description: Something in HydraMind does not work as documented.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Do not post security vulnerability details here;
+        follow [SECURITY.md](https://github.com/himanshu748/hydramind/blob/main/SECURITY.md) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal tool calls, commands, or code. Remove any tokens.
+      placeholder: |
+        1. remember("...", "scope", ["entity"])
+        2. recall("...", "scope")
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - MCP stdio (hydramind)
+        - MCP HTTP (hydramind-http)
+        - Dashboard (hydramind-ui)
+        - Demo or benchmarks
+        - Install or packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste stderr output. It is rendered as code.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: HydraMind version or commit
+      placeholder: 0.3.0 or a commit SHA
+    validations:
+      required: true
+  - type: input
+    id: hydradb
+    attributes:
+      label: HydraDB commit
+      placeholder: 6a2fbb1
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: macOS 15, Python 3.12, Claude Desktop
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I removed tokens and other secrets from this report.
+          required: true
