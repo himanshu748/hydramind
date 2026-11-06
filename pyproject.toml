@@ -33,6 +33,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/himanshu748/hydramind"
 Repository = "https://github.com/himanshu748/hydramind"
+Documentation = "https://github.com/himanshu748/hydramind/tree/main/docs"
 Issues = "https://github.com/himanshu748/hydramind/issues"
 Changelog = "https://github.com/himanshu748/hydramind/blob/main/CHANGELOG.md"
 

@@ -9,6 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Documentation in `docs/`: architecture, graph model with ready-to-run Cypher
+  queries, and trust model with a worked example.
+- CodeQL scanning for Python, TypeScript, and GitHub Actions.
+- `CITATION.cff`, `SUPPORT.md`, `.editorconfig`, and a documentation issue form.
+- Dashboard screenshots in the README.
 - Contributor guide, code of conduct, security policy, issue and pull request
   templates, Dependabot configuration, and `.env.example`.
 - Package metadata (project URLs, keywords, classifiers) in `pyproject.toml` and a

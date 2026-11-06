@@ -148,6 +148,9 @@ UI pull requests.
 ## Documentation
 
 - Update [README.md](README.md) when behavior, configuration, or commands change.
+- Update the guides in [`docs/`](docs/README.md) when the graph schema, trust rules,
+  or architecture change. Every number in `docs/trust-model.md` must stay
+  reproducible from a test or the demo.
 - Keep claims measurable and honest. Say what was run and where, and avoid
   unqualified performance claims.
 - New environment variables go in the README configuration table and in `.env.example`.

@@ -9,6 +9,7 @@ A graph-native [MCP](https://modelcontextprotocol.io) server that stores facts i
 propagates lost trust through provenance, and abstains instead of hallucinating.
 
 [![CI](https://github.com/himanshu748/hydramind/actions/workflows/ci.yml/badge.svg)](https://github.com/himanshu748/hydramind/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/himanshu748/hydramind/actions/workflows/codeql.yml/badge.svg)](https://github.com/himanshu748/hydramind/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![MCP 2026-07-28](https://img.shields.io/badge/MCP-2026--07--28-black.svg)](https://modelcontextprotocol.io)
@@ -20,8 +21,15 @@ propagates lost trust through provenance, and abstains instead of hallucinating.
 [Tools](#-mcp-tools) ·
 [How it works](#-how-it-works) ·
 [Dashboard](#-dashboard) ·
+[Docs](docs/README.md) ·
 [Contributing](CONTRIBUTING.md) ·
 [Roadmap](#-roadmap)
+
+<br/>
+
+<img src="https://raw.githubusercontent.com/himanshu748/hydramind/main/videos/hydramind-remotion-demo/public/screens/dashboard-trust-evidence.png" alt="HydraMind trust graph: a newer deploy policy contradicts an older one, the older claim drops to trust 0.60, a derived runbook drops to 0.70, and the trust history panel explains why" width="900"/>
+
+<sub>A contradiction lowers the older claim to 0.60 and the derived runbook to 0.70. The side panel explains every change.</sub>
 
 </div>
 
@@ -37,6 +45,7 @@ propagates lost trust through provenance, and abstains instead of hallucinating.
 - [How it works](#-how-it-works)
 - [Dashboard](#-dashboard)
 - [Demo and evaluation](#-demo-and-evaluation)
+- [Documentation](#-documentation)
 - [Configuration](#-configuration)
 - [Data model](#-data-model)
 - [Testing and quality](#-testing-and-quality)
@@ -239,6 +248,10 @@ flowchart LR
 5. **Explain.** `explain_trust` and `trace_memory` turn the graph back into plain
    language and evidence paths.
 
+The [trust model](docs/trust-model.md) walks through these rules with a worked
+example, and the [architecture guide](docs/architecture.md) covers the request flow
+and write coordination.
+
 ```mermaid
 flowchart TB
     Agent["Coding agent<br/>(Codex, Claude, Cursor, ...)"] -->|MCP stdio / stateless HTTP| Server["hydramind.server"]
@@ -262,6 +275,17 @@ works right after install:
 - [http://127.0.0.1:8787/app](http://127.0.0.1:8787/app): live HydraDB dashboard to
   seed a demo graph, recall, remember, revise, inspect timelines, run native traces,
   explain trust, and forget.
+
+<table>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/himanshu748/hydramind/main/videos/hydramind-remotion-demo/public/screens/dashboard-recall.png" alt="Recall view ranking the current deploy policy at trust 1.00 above the contradicted policy at 0.60"/></td>
+    <td><img src="https://raw.githubusercontent.com/himanshu748/hydramind/main/videos/hydramind-remotion-demo/public/screens/dashboard-timeline.png" alt="Entity timeline showing Python 3.12 superseded by Python 3.13 with the revision reason"/></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Recall ranks by trust × relevance</sub></td>
+    <td align="center"><sub>Timelines keep superseded facts</sub></td>
+  </tr>
+</table>
 
 The UI uses the same Python memory service as the MCP tools. To work on the UI
 itself, see [UI development](CONTRIBUTING.md#ui-development).
@@ -296,6 +320,14 @@ superiority over vector stores.
 5. Trace a memory through native `algo.SSpaths`, then ask for absent information and get `[]`.
 
 </details>
+
+## 📚 Documentation
+
+| Guide | What you will learn |
+|---|---|
+| [Architecture](docs/architecture.md) | Components, the `remember` request flow, concurrency, and transports |
+| [Graph model](docs/graph-model.md) | Every node, relationship, and property, the memory lifecycle, and ready-to-run Cypher queries |
+| [Trust model](docs/trust-model.md) | Decay rules, a worked two-hop cascade, `explain_trust`, and crash safety |
 
 ## 🔧 Configuration
 
@@ -351,6 +383,10 @@ unavailable.
   transactions. Queries stay within HydraDB's documented
   [Cypher compatibility surface](https://github.com/hydra-db/hydradb/blob/main/cypher-compat.md).
 
+The [graph model guide](docs/graph-model.md) documents every property and includes
+Cypher queries for exploring contradictions, decay history, lineage, and evidence
+paths directly.
+
 ## 🧪 Testing and quality
 
 ```bash
@@ -397,6 +433,7 @@ src/hydramind/
   server.py      MCP server v2 tools, sessionless stdio, stateless HTTP
   web.py         Local JSON API and landing/dashboard server
 ui/src/          React + Vite + TypeScript dashboard (built output in ui/dist)
+docs/            Architecture, graph model, and trust model guides
 examples/        Terminal demo
 benchmarks/      Track 03 evaluation, stress gate, checked-in results
 tests/           Unit, live HydraDB, MCP transport, and web tests
@@ -449,7 +486,8 @@ Notable changes are recorded in the [changelog](CHANGELOG.md).
 ## 🔒 Security
 
 Please do **not** open public issues for vulnerabilities. See
-[SECURITY.md](SECURITY.md) for private reporting.
+[SECURITY.md](SECURITY.md) for private reporting. For questions and help, see
+[SUPPORT.md](SUPPORT.md).
 
 ## 🙏 Acknowledgements and license
 
@@ -464,7 +502,8 @@ HydraMind started as original Hack Hydra hackathon work. It builds on:
 
 Dependency versions and license metadata are in `uv.lock` and `ui/package-lock.json`.
 
-HydraMind is released under the [MIT License](LICENSE).
+HydraMind is released under the [MIT License](LICENSE). If you use it in research,
+please cite it using [CITATION.cff](CITATION.cff) or GitHub's **Cite this repository** button.
 
 <div align="center">
 
