@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use HydraMind in your research or projects, please cite it as below."
+title: "HydraMind: trust-weighted graph memory for coding agents"
+type: software
+authors:
+  - name: "HydraMind contributors"
+repository-code: "https://github.com/himanshu748/hydramind"
+license: MIT
+version: 0.3.0
+date-released: 2026-08-17
+keywords:
+  - model-context-protocol
+  - agent-memory
+  - knowledge-graph
+  - graph-database
+  - hydradb
+  - provenance
+  - trust
+abstract: >-
+  HydraMind is an MCP server that gives coding agents persistent memory in a
+  HydraDB graph. It records contradictions, revisions, and provenance as
+  relationships, propagates lost trust through derived memories, and abstains
+  when evidence is insufficient.

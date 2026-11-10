@@ -1,0 +1,27 @@
+name: Documentation
+description: Report missing, unclear, or outdated documentation.
+labels: ["documentation", "triage"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or section
+      description: File path or link, for example docs/graph-model.md#scopes.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to submit a fix myself.
